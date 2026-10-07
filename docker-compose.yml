@@ -1,0 +1,48 @@
+# Services d'infrastructure pour le développement local.
+# Laravel et React tournent sur votre machine ; seuls les services ci-dessous sont dans Docker.
+name: cevfolio
+
+services:
+  mysql:
+    image: mysql:8.0
+    ports: ["3306:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cevfolio
+      MYSQL_USER: cevfolio
+      MYSQL_PASSWORD: secret
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: [redis-data:/data]
+
+  minio:            # Stockage compatible S3 (remplace Amazon S3 en local)
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]   # 9000 = API S3, 9001 = console web
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes: [minio-data:/data]
+
+  minio-init:       # Crée le bucket "cevfolio" au premier démarrage
+    image: minio/mc
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done;
+      mc mb --ignore-existing local/cevfolio; exit 0;"
+
+  mailpit:          # Capture les e-mails envoyés par l'application
+    image: axllent/mailpit
+    ports: ["1025:1025", "8025:8025"]   # 1025 = SMTP, 8025 = interface web
+
+volumes:
+  mysql-data:
+  redis-data:
+  minio-data:
